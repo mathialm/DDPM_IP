@@ -18,6 +18,7 @@ from guided_diffusion.train_util import TrainLoop
 
 
 def main():
+    print("Starting training!")
     args = create_argparser().parse_args()
 
     dist_util.setup_dist()
