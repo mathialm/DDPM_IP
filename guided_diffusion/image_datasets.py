@@ -2,14 +2,15 @@ import math
 import random
 import os
 
-import sys
-import dnnlib
+#import dnnlib
 
 from PIL import Image
 import blobfile as bf
 import mpi4py
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+
+import datasets.dataset
 
 
 def load_data(*, data_dir, batch_size, image_size, class_cond=False,
@@ -45,10 +46,18 @@ def load_data(*, data_dir, batch_size, image_size, class_cond=False,
         dataset = ImageDataset(image_size, all_files, classes=classes, shard=mpi4py.MPI.COMM_WORLD.Get_rank(),
                                num_shards=mpi4py.MPI.COMM_WORLD.Get_size(), random_crop=random_crop,
                                random_flip=random_flip)
+    elif os.path.splitext(data_dir)[1] == '.csv':
+        #training_set_kwargs = diffusion_stylegan2.dnnlib.util.EasyDict(class_name='diffusion_stylegan2.training.dataset.LabelFileDataset', path=data_dir,
+        #                                           use_labels=True, max_size=None, xflip=False)
+        #dataset = diffusion_stylegan2.dnnlib.util.construct_class_by_name(**training_set_kwargs)  # subclass of training.dataset.Dataset
+
+        dataset = datasets.dataset.LabelFileDataset(path=data_dir, use_labels=False, max_size=None, xflip=False)
     else:
-        training_set_kwargs = dnnlib.util.EasyDict(class_name='training.dataset.ImageFolderDataset', path=data_dir,
-                                                          use_labels=True, max_size=None, xflip=False)
-        dataset = dnnlib.util.construct_class_by_name(**training_set_kwargs)  # subclass of training.dataset.Dataset
+        #Use dataset from Diffusion GAN repository
+        #training_set_kwargs = diffusion_stylegan2.dnnlib.util.EasyDict(class_name='diffusion_stylegan2.training.dataset.ImageFolderDataset', path=data_dir,
+        #                                                  use_labels=True, max_size=None, xflip=False)
+        #dataset = diffusion_stylegan2.dnnlib.util.construct_class_by_name(**training_set_kwargs)  # subclass of training.dataset.Dataset
+        dataset = datasets.dataset.ImageFolderDataset(path=data_dir, use_labels=False, max_size=None, xflip=False)
 
     print(f"Length of dataset: {len(dataset)}")
 

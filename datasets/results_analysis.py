@@ -6,7 +6,9 @@ from scipy import stats
 
 
 def show_images():
-    x = np.load('/m100_work/FF4_Axyon/DDPM/guided_diffusion/evaluations/celeba_noise_0.1_320k_900steps_50000_samples.npz')['arr_0']
+    x = np.load('/cluster/home/mathialm/poisoning/ML_Poisoning/results/pipeline/StyleGAN_Full64/Recipe1M/DDPM-IP/clean/noDef/9/model1940000.pt/samples.npz')['arr_0']
+    #x = np.load('/cluster/home/mathialm/poisoning/ML_Poisoning/results/pipeline/StyleGAN_Full64/Recipe1M/DDPM-IP/positive_association-other_replacement-vanilla_extract-baking_soda/noDef/4/model1610000.pt/samples.npz')['arr_0']
+    #x = np.load('/cluster/home/mathialm/poisoning/ML_Poisoning/results/pipeline/StyleGAN_Full64/Recipe1M/DDPM-IP/positive_association-simple_replacement-olive_oil-eggs/noDef/2/model1970000.pt/samples.npz')['arr_0']
     plt.figure(figsize=(20, 20))
     for i in range(36):  # 8*8 or 6*6
         img = x[i+64, :, :, :]
@@ -259,10 +261,10 @@ def FID_cifar():
 
 
 if __name__ == '__main__':
-    # show_images()
+    show_images()
     # gaussian_histogram(60)
     # shapiro_wilk_test(1)
     # gaussian_error_std_for_each_pixel()
     # gaussian_error_std_along_timesteps()
-    FID_results()
+    #FID_results()
     # FID_cifar()

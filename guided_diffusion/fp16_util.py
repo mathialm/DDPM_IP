@@ -1,6 +1,7 @@
 """
 Helpers to train with 16-bit precision.
 """
+import math
 
 import numpy as np
 import torch as th
@@ -234,4 +235,4 @@ class MixedPrecisionTrainer:
 
 
 def check_overflow(value):
-    return (value == float("inf")) or (value == -float("inf")) or (value != value)
+    return (value == float("inf")) or (value == -float("inf")) or (value != value) or math.isnan(value)

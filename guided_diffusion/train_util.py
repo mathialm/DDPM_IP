@@ -1,3 +1,4 @@
+import argparse
 import copy
 import functools
 import os
@@ -5,6 +6,7 @@ import pathlib
 import random
 import time
 
+import PIL.Image
 import blobfile as bf
 import numpy as np
 import torch
@@ -13,6 +15,7 @@ import torch.distributed as dist
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from torch.optim import AdamW
 
+import values
 from . import dist_util, logger
 from .fp16_util import MixedPrecisionTrainer
 from .nn import update_ema
@@ -21,6 +24,11 @@ from .resample import LossAwareSampler, UniformSampler
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
+from .script_util import model_and_diffusion_defaults, add_dict_to_argparser
+
+from scripts.image_sample import generate_samples
+from scripts.image_sample import create_argparser as sample_parser
+
 INITIAL_LOG_LOSS_SCALE = 20.0
 
 
@@ -39,6 +47,8 @@ class TrainLoop:
         save_interval,
         save_path,
         resume_checkpoint,
+        generate_samples_interval = 50000,
+        num_samples=10000,
         use_fp16=False,
         fp16_scale_growth=1e-3,
         schedule_sampler=None,
@@ -63,6 +73,8 @@ class TrainLoop:
         self.log_interval = log_interval
         self.save_interval = save_interval
         self.save_path = save_path
+        self.generate_samples_interval = generate_samples_interval
+        self.num_sample = num_samples
         self.resume_checkpoint = resume_checkpoint
         self.use_fp16 = use_fp16
         self.fp16_scale_growth = fp16_scale_growth
@@ -167,6 +179,7 @@ class TrainLoop:
             or self.step + self.resume_step < self.lr_anneal_steps
         ):
             data_element = next(self.data)
+
             try:
                 batch, cond = data_element
                 cond.items()
@@ -186,10 +199,15 @@ class TrainLoop:
                 # Run for a finite amount of time in integration tests.
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
                     return
+            # Generate samples
+            if self.step % self.generate_samples_interval == 0:
+                self.generate_samples_()
             self.step += 1
         # Save the last checkpoint if it wasn't already saved.
         if (self.step - 1) % self.save_interval != 0:
             self.save()
+
+
 
     def run_step(self, batch, cond):
         self.forward_backward(batch, cond)
@@ -198,6 +216,19 @@ class TrainLoop:
             self._update_ema()
         self._anneal_lr()
         self.log_step()
+
+    def generate_samples_(self):
+        args, unknown_args = sample_parser().parse_known_args()
+
+        device = dist_util.dev()
+
+        model_name = f"model{(self.step + self.resume_step):06d}.pt"
+
+        dir_tree = str(self.save_path).strip(values.MODELS_BASE + "/")
+
+        full_path = os.path.join(values.RESULTS_BASE, dir_tree, model_name, "samples.npz")
+
+        generate_samples(args, self.diffusion, self.model, full_path, device)
 
     def forward_backward(self, batch, cond):
         self.mp_trainer.zero_grad()
@@ -282,6 +313,34 @@ class TrainLoop:
         dist.barrier()
 
 
+def create_argparser():
+    defaults = dict(
+        data_dir="",
+        schedule_sampler="uniform",
+        lr=1e-4,
+        weight_decay=0.0,
+        lr_anneal_steps=0,
+        batch_size=1,
+        microbatch=-1,  # -1 disables microbatches
+        ema_rate="0.9999",  # comma-separated list of EMA values
+        log_interval=100,
+        log_path="./logs",
+        save_interval=50000,
+        generate_samples_interval=10000,
+        num_samples=10000,
+        save_path="../models",
+        resume_checkpoint="",
+        use_fp16=False,
+        use_ddim=True,
+        fp16_scale_growth=1e-3,
+        input_pertub = 0.0,
+        seed=999,
+    )
+    defaults.update(model_and_diffusion_defaults())
+    parser = argparse.ArgumentParser()
+    add_dict_to_argparser(parser, defaults)
+    return parser
+
 def parse_resume_step_from_filename(filename):
     """
     Parse filenames of the form path/to/modelNNNNNN.pt, where NNNNNN is the
@@ -307,6 +366,8 @@ def get_blob_logdir():
 def find_resume_checkpoint(resume_checkpoint, save_path):
     # On your infrastructure, you may want to override this to automatically
     # discover the latest checkpoint on your blob storage, etc.
+    if not os.path.exists(save_path):
+        return None
     files = [str(file) for file in pathlib.Path(save_path).iterdir() if file.is_file()]
 
     model_files_step = []

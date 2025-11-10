@@ -18,7 +18,8 @@ from guided_diffusion.train_util import TrainLoop
 
 
 def main():
-    args = create_argparser().parse_args()
+    print("Starting training!")
+    args, unknown_args = create_argparser().parse_known_args()
 
     dist_util.setup_dist()
 
@@ -43,6 +44,7 @@ def main():
         batch_size=args.batch_size,
         image_size=args.image_size,
         class_cond=args.class_cond,
+        deterministic=True,
     )
 
     logger.log("training...")
@@ -57,6 +59,8 @@ def main():
         log_interval=args.log_interval,
         save_interval=args.save_interval,
         save_path=args.save_path,
+        generate_samples_interval=args.generate_samples_interval,
+        num_samples=args.num_samples,
         resume_checkpoint=args.resume_checkpoint,
         use_fp16=args.use_fp16,
         fp16_scale_growth=args.fp16_scale_growth,
@@ -79,10 +83,13 @@ def create_argparser():
         ema_rate="0.9999",  # comma-separated list of EMA values
         log_interval=100,
         log_path="./logs",
-        save_interval=10000,
+        save_interval=50000,
+        generate_samples_interval=10000,
+        num_samples=10000,
         save_path="../models",
         resume_checkpoint="",
         use_fp16=False,
+        use_ddim=True,
         fp16_scale_growth=1e-3,
         input_pertub = 0.0,
         seed=999,

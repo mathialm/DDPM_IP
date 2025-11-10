@@ -14,7 +14,16 @@ import torch.distributed as dist
 
 # Change this to reflect your cluster layout.
 # The GPU for a given rank is (rank % GPUS_PER_NODE).
-GPUS_PER_NODE = 1
+if 'ENV_GPUS' not in os.environ.keys():
+    GPUS = 1
+else:
+    GPUS = int(os.environ["ENV_GPUS"])
+
+if 'ENV_NODES' not in os.environ.keys():
+    NODES = 1
+else:
+    NODES = int(os.environ["ENV_NODES"])
+GPUS_PER_NODE = int(GPUS / NODES)
 
 SETUP_RETRY_COUNT = 3
 
@@ -26,9 +35,10 @@ def setup_dist():
     if dist.is_initialized():
         return
 
-    print(th.cuda.is_available())
+    print(f"{th.cuda.is_available() = }")
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{MPI.COMM_WORLD.Get_rank() % GPUS_PER_NODE}"
+    print(f"{os.environ['CUDA_VISIBLE_DEVICES'] = }")
 
     comm = MPI.COMM_WORLD
     backend = "gloo" if not th.cuda.is_available() else "nccl"
@@ -51,7 +61,7 @@ def dev():
     Get the device to use for torch.distributed.
     """
     if th.cuda.is_available():
-        return th.device(f"cuda")
+        return th.device(f"cuda:{os.environ['CUDA_VISIBLE_DEVICES']}")
     return th.device("cpu")
 
 
@@ -82,9 +92,9 @@ def sync_params(params):
     """
     Synchronize a sequence of Tensors across ranks from rank 0.
     """
-    for p in params:
+    for i, p in enumerate(params):
         with th.no_grad():
-            dist.broadcast(p, 0)
+            dist.broadcast(tensor=p, src=0)
 
 
 def _find_free_port():

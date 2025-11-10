@@ -1,3 +1,4 @@
+import math
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -49,14 +50,26 @@ class ScheduleSampler(ABC):
                  - timesteps: a tensor of timestep indices.
                  - weights: a tensor of weights to scale the resulting losses.
         """
+        #np.nan_to_num(self.weights(), copy=False)
         w = self.weights()
-        p = w / np.sum(w)
-        indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
-        indices = th.from_numpy(indices_np).long().to(device)
-        weights_np = 1 / (len(p) * p[indices_np])
-        weights = th.from_numpy(weights_np).float().to(device)
-        return indices, weights
+        try:
+            #Workaround, weights goes towards 0, so at that point set it manually
+            p = w / np.sum(w)
 
+            indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
+
+            indices = th.from_numpy(indices_np).long().to(device)
+            weights_np = 1 / (len(w) * p[indices_np])
+            weights = th.from_numpy(weights_np).float().to(device)
+            return indices, weights
+        except ValueError as e:
+            print(f'Weights: {w}')
+            raise e
+
+
+
+def check_overflow(value):
+    return (value == float("inf")) or (value == -float("inf")) or (value != value) or math.isnan(value)
 
 class UniformSampler(ScheduleSampler):
     def __init__(self, diffusion):
